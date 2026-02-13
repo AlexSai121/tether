@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Outfit', system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+}
+
+.font-serif {
+  font-family: 'Fraunces', serif;
+}
+
+body {
+  /* Warm Charcoal/Stone Background */
+  @apply bg-[#141413] text-[#d6d6d1] m-0 min-w-[320px] min-h-screen selection:bg-[#88a090]/30;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-serif tracking-tight text-[#e0e0dc];
+  }
+}
+
+/* Natural & Grounded Utilities */
+.paper-texture {
+  background-image: url("https://www.transparenttextures.com/patterns/p6.png");
+  opacity: 0.03;
+}
+
+.soft-glass {
+  @apply bg-white/[0.02] backdrop-blur-md border border-white/[0.04] shadow-inner;
+}
+
+.sage-glow {
+  box-shadow: 0 0 30px rgba(136, 160, 144, 0.1);
+}
+
+.organic-border {
+  @apply border-[#2a2a28];
+}
+
+/* Subtle gradient for natural depth */
+.depth-gradient {
+  background: radial-gradient(circle at 50% 100%, rgba(136, 160, 144, 0.05) 0%, transparent 70%);
+}
+
+.button-grounded {
+  @apply py-3 px-6 rounded-lg font-medium transition-all duration-300 border border-[#3a3a38] hover:bg-[#2a2a28] hover:border-[#4a4a48];
+}
+
+@keyframes drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(5%, 10%) scale(1.1);
+  }
+
+  66% {
+    transform: translate(-5%, 5%) scale(0.9);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes drift-reverse {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(-8%, -5%) scale(0.95);
+  }
+
+  66% {
+    transform: translate(4%, -10%) scale(1.05);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+.animate-drift {
+  animation: drift 25s ease-in-out infinite;
+}
+
+.animate-drift-slow {
+  animation: drift-reverse 35s ease-in-out infinite;
+}
+
+.blur-slow {
+  filter: blur(80px);
+}
+
+.animate-spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+@keyframes breathing {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.05;
+  }
+
+  50% {
+    transform: scale(0.95);
+    opacity: 0.2;
+  }
+
+  100% {
+    transform: scale(0.8);
+    opacity: 0.05;
+  }
+}
