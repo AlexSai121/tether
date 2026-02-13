@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import useTabFocus from '../hooks/useTabFocus';
-import { AlertTriangle, XCircle, CheckCircle, Mic, MicOff, LogOut, ThumbsUp, ThumbsDown, Clock, Heart, Zap } from 'lucide-react';
+import { AlertTriangle, XCircle, CheckCircle, Mic, MicOff, LogOut, Heart, Zap, Clock, ThumbsUp, ThumbsDown } from 'lucide-react';
+import SessionService from '../services/SessionService';
 
-const SessionView = ({ mode, partner, tasks, onComplete, onFail }) => {
+const SessionView = ({ sessionId, currentUser, mode, partner, sessionData, onComplete, onFail }) => {
       // Mode is in minutes, convert to seconds
       const [timeLeft, setTimeLeft] = useState(parseInt(mode) * 60);
       const [status, setStatus] = useState('active'); // active, warning, failed, success, abandoning, approved, denied
@@ -12,10 +13,12 @@ const SessionView = ({ mode, partner, tasks, onComplete, onFail }) => {
       const [approvalProgress, setApprovalProgress] = useState(0);
 
       // Social & Flow States
-      const [showTasks, setShowTasks] = useState(false); // Toggle for task list
+      const [showTasks, setShowTasks] = useState(false);
       const [pulseReceived, setPulseReceived] = useState(false);
       const [pulseSent, setPulseSent] = useState(false);
-      const [flowIntensity, setFlowIntensity] = useState(0); // 0-100 based on streak
+      const [flowIntensity, setFlowIntensity] = useState(0);
+
+      const lastPulseHandled = useRef(null);
 
       const abandonReasons = [
             "Emergency",
@@ -29,13 +32,13 @@ const SessionView = ({ mode, partner, tasks, onComplete, onFail }) => {
       const handleFail = () => {
             if (status !== 'abandoning' && status !== 'approved' && status !== 'denied' && status !== 'failed') {
                   setStatus('failed');
-                  // Trigger results screen after a brief delay so user sees the "Broken" state
                   setTimeout(() => onFail('fail'), 2000);
             }
       };
 
       const { isFocused, timeAway } = useTabFocus(handleFail);
 
+      // 1. Timer & Focus Flow
       useEffect(() => {
             if (status !== 'active' && status !== 'warning') return;
 
@@ -48,9 +51,8 @@ const SessionView = ({ mode, partner, tasks, onComplete, onFail }) => {
                               return 0;
                         }
 
-                        // Increase flow intensity over time if focused
                         if (isFocused && status === 'active') {
-                              setFlowIntensity(current => Math.min(current + 0.5, 100)); // Max out after ~3 mins
+                              setFlowIntensity(current => Math.min(current + 0.5, 100));
                         } else {
                               setFlowIntensity(0);
                         }
@@ -59,23 +61,33 @@ const SessionView = ({ mode, partner, tasks, onComplete, onFail }) => {
                   });
             }, 1000);
 
-            // Simulate partner pulse (randomly between 5m and 15m mark if long session, or just random)
-            const randomPulseCheck = setInterval(() => {
-                  if (status === 'active' && Math.random() > 0.995 && !pulseReceived) {
-                        setPulseReceived(true);
-                        setTimeout(() => setPulseReceived(false), 4000); // Pulse lasts 4s
-                  }
-            }, 2000);
+            return () => clearInterval(timer);
+      }, [status, onComplete, isFocused]);
 
-            return () => {
-                  clearInterval(timer);
-                  clearInterval(randomPulseCheck);
-            };
-      }, [status, onComplete, isFocused, pulseReceived]);
+      // 2. Real-time Pulse Listener
+      useEffect(() => {
+            if (sessionData?.lastPulse) {
+                  const pulse = sessionData.lastPulse;
+                  // Only show if it's from partner and we haven't handled this specific pulse yet (using timestamp/time)
+                  const pulseId = pulse.time?.toMillis() || pulse.time;
+                  if (pulse.from !== currentUser.uid && pulseId !== lastPulseHandled.current) {
+                        lastPulseHandled.current = pulseId;
+                        setPulseReceived(true);
+                        setTimeout(() => setPulseReceived(false), 4000);
+                  }
+            }
+      }, [sessionData?.lastPulse, currentUser.uid]);
+
+      // 3. Status sync from Firebase (e.g. if partner abandons)
+      useEffect(() => {
+            if (sessionData?.status === 'abandoned' && status !== 'abandoned') {
+                  setStatus('abandoned'); // Simple placeholder for now
+            }
+      }, [sessionData?.status, status]);
 
       // Update status based on focus
       useEffect(() => {
-            if (status === 'failed' || status === 'success' || status === 'abandoning' || status === 'approved' || status === 'denied') return;
+            if (['failed', 'success', 'abandoning', 'approved', 'denied'].includes(status)) return;
 
             if (!isFocused) {
                   setStatus('warning');
@@ -92,9 +104,9 @@ const SessionView = ({ mode, partner, tasks, onComplete, onFail }) => {
       };
 
       const handlePulseSend = () => {
-            if (pulseSent) return;
+            if (pulseSent || !sessionId) return;
             setPulseSent(true);
-            // Reset pulse sent availability after 30s
+            SessionService.sendPulse(sessionId, currentUser.uid);
             setTimeout(() => setPulseSent(false), 30000);
       };
 
@@ -103,24 +115,22 @@ const SessionView = ({ mode, partner, tasks, onComplete, onFail }) => {
             setIsAbandoning(false);
             setStatus('abandoning');
 
-            // Simulate partner approval
+            // For now keeping manual simulation for approval to keep UI flow
+            // In a real app, this would update Firestore and wait for partner response
             let progress = 0;
             const interval = setInterval(() => {
                   progress += 5;
                   setApprovalProgress(progress);
                   if (progress >= 100) {
                         clearInterval(interval);
-                        // 70% chance of approval
                         const isApproved = Math.random() > 0.3;
                         setStatus(isApproved ? 'approved' : 'denied');
                   }
             }, 100);
       };
 
-      // Flow Pulse Styles calculation
-      // Ranges from 0 (no pulse) to 1 (max pulse)
-      const pulseOpacity = 0.05 + (flowIntensity / 100) * 0.15; // 0.05 to 0.20
-      const pulseSpeed = 10 - (flowIntensity / 100) * 5; // 10s down to 5s
+      const pulseOpacity = 0.05 + (flowIntensity / 100) * 0.15;
+      const pulseSpeed = 10 - (flowIntensity / 100) * 5;
 
       if (status === 'failed') {
             return (
@@ -157,6 +167,11 @@ const SessionView = ({ mode, partner, tasks, onComplete, onFail }) => {
                   </div>
             );
       }
+
+      // Extract tasks from sessionData
+      const partnerUid = sessionData?.users?.find(uid => uid !== currentUser.uid);
+      const myTasks = sessionData?.tasks?.[currentUser.uid] || [];
+      const partnerTasks = sessionData?.tasks?.[partnerUid] || [];
 
       return (
             <div className={`min-h-screen transition-colors duration-1000 flex flex-col items-center justify-center relative overflow-hidden ${status === 'warning' ? 'bg-[#4a2b2b]' : 'bg-[#141413]'}`}>
@@ -212,15 +227,15 @@ const SessionView = ({ mode, partner, tasks, onComplete, onFail }) => {
                                           <div>
                                                 <p className="text-xs text-[#88a090] mb-1 font-bold">You</p>
                                                 <ul className="text-xs text-[#e0e0dc] space-y-1 ml-1 font-light">
-                                                      {tasks?.my?.map((t, i) => <li key={i}>• {t}</li>)}
-                                                      {(!tasks?.my || tasks.my.length === 0) && <li className="italic opacity-50">No tasks set</li>}
+                                                      {myTasks.map((t, i) => <li key={i}>• {t}</li>)}
+                                                      {myTasks.length === 0 && <li className="italic opacity-50">No tasks set</li>}
                                                 </ul>
                                           </div>
                                           <div className="border-t border-[#2a2a28] pt-2">
-                                                <p className="text-xs text-[#88a090] mb-1 font-bold">{partner?.name}</p>
+                                                <p className="text-xs text-[#88a090] mb-1 font-bold">{partner?.name || 'Partner'}</p>
                                                 <ul className="text-xs text-[#e0e0dc] space-y-1 ml-1 font-light">
-                                                      {tasks?.partner?.map((t, i) => <li key={i}>• {t}</li>)}
-                                                      {(!tasks?.partner || tasks.partner.length === 0) && <li className="italic opacity-50">No tasks set</li>}
+                                                      {partnerTasks.map((t, i) => <li key={i}>• {t}</li>)}
+                                                      {partnerTasks.length === 0 && <li className="italic opacity-50">No tasks set</li>}
                                                 </ul>
                                           </div>
                                     </div>

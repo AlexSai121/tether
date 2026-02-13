@@ -17,6 +17,11 @@ const TetherApp = () => {
   const [sessionData, setSessionData] = useState(null);
   const [partner, setPartner] = useState(null);
 
+  // Results state
+  const [lastResult, setLastResult] = useState('success');
+  const [oldElo, setOldElo] = useState(1000);
+  const [newElo, setNewElo] = useState(1000);
+
   // --- Subscription to Active Session ---
   useEffect(() => {
     if (!sessionId) return;
@@ -34,12 +39,14 @@ const TetherApp = () => {
       if (data.status === 'active' && view !== 'session') {
         setView('session');
       } else if (data.status === 'finished' && view !== 'results') {
-        setView('results');
+        handleSessionFinished('success');
+      } else if (data.status === 'abandoned' && view !== 'results') {
+        handleSessionFinished('abandoned');
       }
     });
 
     return () => unsubscribe();
-  }, [sessionId, view, currentUser]);
+  }, [sessionId, view, currentUser, handleSessionFinished]);
 
   const handleFindMatch = async (mode) => {
     // Note: We need a way to cancel this if user leaves lobby, but keeping simple for now
@@ -55,19 +62,26 @@ const TetherApp = () => {
     }
   };
 
-  const handleSessionComplete = () => {
-    if (sessionId) {
-      SessionService.updateStatus(sessionId, 'finished');
-      // Elo update logic should ideally trigger here or be listened to
-    }
-  };
+  const handleSessionFinished = async (resultType) => {
+    setLastResult(resultType);
+    const currentElo = userProfile?.elo || 1000;
+    const change = EloService.calculateEloChange(currentElo, resultType);
+    setOldElo(currentElo);
+    const calculatedNewElo = currentElo + change;
+    setNewElo(calculatedNewElo);
 
-  const handleSessionFail = () => {
-    // Logic for abandonment
-    if (sessionId) {
-      SessionService.updateStatus(sessionId, 'abandoned');
-    }
     setView('results');
+
+    // Persist to Firebase
+    if (currentUser) {
+      import('./services/firebase').then(async ({ db }) => {
+        const { doc, updateDoc } = await import('firebase/firestore');
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          elo: calculatedNewElo,
+          rank: EloService.getRank(calculatedNewElo)
+        });
+      });
+    }
   };
 
   const handleReturnToLobby = () => {
@@ -92,6 +106,7 @@ const TetherApp = () => {
           onMatchFound={handleFindMatch}
           userElo={userProfile?.elo || 1000}
           userRank={userProfile?.rank || 'Drifter'}
+          userProfile={userProfile}
         />
       )}
 
@@ -107,19 +122,21 @@ const TetherApp = () => {
 
       {view === 'session' && (
         <SessionView
+          sessionId={sessionId}
+          currentUser={currentUser}
           mode={sessionData?.mode || '50'}
           partner={partner}
-          tasks={sessionData?.tasks || {}}
-          onComplete={handleSessionComplete}
-          onFail={handleSessionFail}
+          sessionData={sessionData}
+          onComplete={() => SessionService.updateStatus(sessionId, 'finished')}
+          onFail={() => SessionService.updateStatus(sessionId, 'abandoned')}
         />
       )}
 
       {view === 'results' && (
         <ResultsView
-          result={'success'}
-          oldElo={userProfile?.elo || 1000}
-          newElo={userProfile?.elo || 1000}
+          result={lastResult}
+          oldElo={oldElo}
+          newElo={newElo}
           onReturn={handleReturnToLobby}
         />
       )}

@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Shield, Target, Zap, Users, Flame, Info, ArrowRight, Circle } from 'lucide-react';
 import MatchmakingService from '../services/MatchmakingService';
 
-const Lobby = ({ onMatchFound, userElo, userRank }) => {
+const Lobby = ({ onMatchFound, userElo, userRank, userProfile }) => {
       const [mode, setMode] = useState('50');
       const [isSearching, setIsSearching] = useState(false);
 
-      const userName = "Alex Tip"; // Still hardcoded for now, but rank/elo are dynamic
+      const userName = userProfile?.displayName || "Drifter";
 
       const handleFindMatch = async () => {
             setIsSearching(true);
