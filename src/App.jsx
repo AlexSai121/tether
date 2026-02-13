@@ -1,79 +1,137 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Lobby from './components/Lobby';
 import PreSessionView from './components/PreSessionView';
 import SessionView from './components/SessionView';
 import ResultsView from './components/ResultsView';
+import LoginView from './components/LoginView';
 import EloService from './services/EloService';
+import MatchmakingService from './services/MatchmakingService';
+import SessionService from './services/SessionService';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './index.css';
 
-function App() {
+const TetherApp = () => {
+  const { currentUser, userProfile, loading } = useAuth();
   const [view, setView] = useState('lobby'); // lobby, pre-session, session, results
-  const [userElo, setUserElo] = useState(2450);
-  const [sessionMode, setSessionMode] = useState('50');
+  const [sessionId, setSessionId] = useState(null);
+  const [sessionData, setSessionData] = useState(null);
   const [partner, setPartner] = useState(null);
-  const [lastResult, setLastResult] = useState(null);
-  const [oldElo, setOldElo] = useState(2450);
-  const [sessionTasks, setSessionTasks] = useState([]); // [myTasks, partnerTasks]
 
-  const handleMatchFound = (mode, partnerData) => {
-    setSessionMode(mode);
-    setPartner(partnerData);
-    setView('pre-session');
+  // --- Subscription to Active Session ---
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const unsubscribe = SessionService.subscribe(sessionId, (data) => {
+      setSessionData(data);
+
+      if (data.users && currentUser) {
+        const partnerUid = data.users.find(uid => uid !== currentUser.uid);
+        if (partnerUid && data.userData && data.userData[partnerUid]) {
+          setPartner(data.userData[partnerUid]);
+        }
+      }
+
+      if (data.status === 'active' && view !== 'session') {
+        setView('session');
+      } else if (data.status === 'finished' && view !== 'results') {
+        setView('results');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [sessionId, view, currentUser]);
+
+  const handleFindMatch = async (mode) => {
+    // Note: We need a way to cancel this if user leaves lobby, but keeping simple for now
+    await MatchmakingService.findMatch(mode, userProfile, (sid) => {
+      setSessionId(sid);
+      setView('pre-session');
+    });
   };
 
-  const handlePreSessionComplete = (myTasks, partnerTasks) => {
-    setSessionTasks({ my: myTasks, partner: partnerTasks });
-    setView('session');
+  const handlePreSessionReady = (myTasks) => {
+    if (sessionId && currentUser) {
+      SessionService.setReady(sessionId, currentUser.uid, myTasks);
+    }
   };
 
-  const handleSessionFinished = (resultType) => {
-    const change = EloService.calculateEloChange(userElo, resultType);
-    setOldElo(userElo);
-    setUserElo(prev => prev + change);
-    setLastResult(resultType);
+  const handleSessionComplete = () => {
+    if (sessionId) {
+      SessionService.updateStatus(sessionId, 'finished');
+      // Elo update logic should ideally trigger here or be listened to
+    }
+  };
+
+  const handleSessionFail = () => {
+    // Logic for abandonment
+    if (sessionId) {
+      SessionService.updateStatus(sessionId, 'abandoned');
+    }
     setView('results');
   };
 
   const handleReturnToLobby = () => {
     setView('lobby');
+    setSessionId(null);
+    setSessionData(null);
+    setPartner(null);
   };
+
+  if (loading) {
+    return <div className="min-h-screen bg-[#141413] flex items-center justify-center text-[#88a090]">Loading...</div>;
+  }
+
+  if (!currentUser) {
+    return <LoginView />;
+  }
 
   return (
     <>
       {view === 'lobby' && (
         <Lobby
-          onMatchFound={handleMatchFound}
-          userElo={userElo}
-          userRank={EloService.getRank(userElo)}
+          onMatchFound={handleFindMatch}
+          userElo={userProfile?.elo || 1000}
+          userRank={userProfile?.rank || 'Drifter'}
         />
       )}
 
-      {view === 'pre-session' && (
+      {view === 'pre-session' && sessionId && (
         <PreSessionView
+          sessionId={sessionId}
+          currentUser={currentUser}
           partner={partner}
-          onReady={handlePreSessionComplete}
+          sessionData={sessionData}
+          onReady={handlePreSessionReady}
         />
       )}
 
       {view === 'session' && (
         <SessionView
-          mode={sessionMode}
+          mode={sessionData?.mode || '50'}
           partner={partner}
-          tasks={sessionTasks}
-          onComplete={() => handleSessionFinished('success')}
-          onFail={(type = 'fail') => handleSessionFinished(type)}
+          tasks={sessionData?.tasks || {}}
+          onComplete={handleSessionComplete}
+          onFail={handleSessionFail}
         />
       )}
 
       {view === 'results' && (
         <ResultsView
-          result={lastResult}
-          oldElo={oldElo}
-          newElo={userElo}
+          result={'success'}
+          oldElo={userProfile?.elo || 1000}
+          newElo={userProfile?.elo || 1000}
           onReturn={handleReturnToLobby}
         />
       )}
     </>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <TetherApp />
+    </AuthProvider>
   );
 }
 
