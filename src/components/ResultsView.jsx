@@ -75,7 +75,7 @@ const ResultsView = ({ result, oldElo, newElo, onReturn, sessionId, currentUser,
                                     </div>
                               </div>
 
-                              {/* Elo Bar */}
+                              {/* Elo Bar - Only show if partner exists, or maybe always? let's keep it. */}
                               <div className="h-1.5 w-full bg-[#2a2a28] rounded-full overflow-hidden mb-4">
                                     <div
                                           className={`h-full transition-all duration-1000 ease-out ${isGain ? 'bg-[#88a090]' : 'bg-rose-500'}`}
@@ -88,44 +88,46 @@ const ResultsView = ({ result, oldElo, newElo, onReturn, sessionId, currentUser,
                               </div>
                         </div>
 
-                        {/* Post-Session Note */}
-                        <div className="bg-[#1c1c1b] border border-[#2a2a28] rounded-2xl p-6 mb-6">
-                              {partnerNote && (
-                                    <div className="mb-4 p-3 bg-[#88a090]/10 border border-[#88a090]/20 rounded-xl text-left">
-                                          <p className="text-[10px] uppercase tracking-widest text-[#88a090] font-bold mb-1">
-                                                <MessageCircle className="w-3 h-3 inline mr-1" /> From {partner?.name || 'Partner'}
+                        {/* Partner Note - Only if partner exists */}
+                        {partner && (
+                              <div className="bg-[#1c1c1b] border border-[#2a2a28] rounded-2xl p-6 mb-6">
+                                    {partnerNote && (
+                                          <div className="mb-4 p-3 bg-[#88a090]/10 border border-[#88a090]/20 rounded-xl text-left">
+                                                <p className="text-[10px] uppercase tracking-widest text-[#88a090] font-bold mb-1">
+                                                      <MessageCircle className="w-3 h-3 inline mr-1" /> From {partner.name}
+                                                </p>
+                                                <p className="text-sm font-light italic text-[#e0e0dc]">"{partnerNote}"</p>
+                                          </div>
+                                    )}
+                                    {!noteSent ? (
+                                          <div className="flex items-center space-x-3">
+                                                <input
+                                                      type="text"
+                                                      value={note}
+                                                      onChange={e => setNote(e.target.value)}
+                                                      placeholder="Leave a note for your partner..."
+                                                      maxLength={280}
+                                                      className="flex-1 bg-transparent text-sm text-[#e0e0dc] placeholder-[#5c5c58] focus:outline-none font-light"
+                                                />
+                                                <button
+                                                      onClick={handleSendNote}
+                                                      disabled={!note.trim()}
+                                                      className="p-2 rounded-full bg-[#88a090]/20 text-[#88a090] hover:bg-[#88a090]/30 transition-colors disabled:opacity-30"
+                                                >
+                                                      <Send className="w-4 h-4" />
+                                                </button>
+                                          </div>
+                                    ) : (
+                                          <p className="text-xs text-[#88a090] uppercase tracking-widest font-bold flex items-center justify-center space-x-2">
+                                                <Check className="w-4 h-4" />
+                                                <span>Note Sent</span>
                                           </p>
-                                          <p className="text-sm font-light italic text-[#e0e0dc]">"{partnerNote}"</p>
-                                    </div>
-                              )}
-                              {!noteSent ? (
-                                    <div className="flex items-center space-x-3">
-                                          <input
-                                                type="text"
-                                                value={note}
-                                                onChange={e => setNote(e.target.value)}
-                                                placeholder="Leave a note for your partner..."
-                                                maxLength={280}
-                                                className="flex-1 bg-transparent text-sm text-[#e0e0dc] placeholder-[#5c5c58] focus:outline-none font-light"
-                                          />
-                                          <button
-                                                onClick={handleSendNote}
-                                                disabled={!note.trim()}
-                                                className="p-2 rounded-full bg-[#88a090]/20 text-[#88a090] hover:bg-[#88a090]/30 transition-colors disabled:opacity-30"
-                                          >
-                                                <Send className="w-4 h-4" />
-                                          </button>
-                                    </div>
-                              ) : (
-                                    <p className="text-xs text-[#88a090] uppercase tracking-widest font-bold flex items-center justify-center space-x-2">
-                                          <Check className="w-4 h-4" />
-                                          <span>Note Sent</span>
-                                    </p>
-                              )}
-                        </div>
+                                    )}
+                              </div>
+                        )}
 
-                        {/* Social Actions */}
-                        {isGain && (
+                        {/* Social Actions - Only if partner */}
+                        {isGain && partner && (
                               <div className="grid grid-cols-2 gap-4 mb-8">
                                     <button
                                           onClick={handleSendGratitude}

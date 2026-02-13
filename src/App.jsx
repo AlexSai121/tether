@@ -56,9 +56,11 @@ const TetherApp = () => {
 
       if (data.users && currentUser) {
         const pUid = data.users.find(uid => uid !== currentUser.uid);
-        setPartnerUid(pUid);
+        setPartnerUid(pUid || null);
         if (pUid && data.userMap && data.userMap[pUid]) {
           setPartner(data.userMap[pUid]);
+        } else {
+          setPartner(null);
         }
       }
 
@@ -94,10 +96,6 @@ const TetherApp = () => {
     setPartner(null);
     setPartnerUid(null);
   };
-
-  if (loading) {
-    return <div className="min-h-screen bg-[#141413] flex items-center justify-center text-[#88a090]">Loading...</div>;
-  }
 
   if (!currentUser) {
     return <LoginView />;

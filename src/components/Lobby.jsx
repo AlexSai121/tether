@@ -149,6 +149,21 @@ const Lobby = ({ onMatchFound, userElo, userRank, userProfile, currentUser, onVi
                                                       </>
                                                 )}
                                           </button>
+
+                                          <div className="mt-3 text-center">
+                                                <button
+                                                      onClick={async () => {
+                                                            setIsSearching(true);
+                                                            const sessionId = await MatchmakingService.startSoloSession(mode, userProfile);
+                                                            setIsSearching(false);
+                                                            if (onMatchFound) onMatchFound(mode, null, sessionId);
+                                                      }}
+                                                      disabled={isSearching}
+                                                      className="text-[10px] uppercase tracking-widest text-[#5c5c58] hover:text-[#e0e0dc] transition-colors border-b border-transparent hover:border-[#5c5c58]"
+                                                >
+                                                      Enter Solo Focus
+                                                </button>
+                                          </div>
                                     </div>
 
                                     <div className="mt-8 flex justify-between space-x-4">

@@ -36,6 +36,47 @@ const SessionView = ({ sessionId, currentUser, mode, partner, sessionData, onCom
             }
       };
 
+      // Partner focus simulation or real data
+      const partnerFocus = partner ? (partner.focusLevel || 0) : 100; // If solo, partner is "perfect" (self)
+      const isPartnerFlowing = partnerFocus > 80;
+
+      // Connection Hygiene (Only if partner exists)
+      const [isPartnerDisconnected, setPartnerDisconnected] = useState(false);
+
+      useEffect(() => {
+            if (!sessionId || !currentUser || !partner) return;
+
+            // 1. Write our heartbeat
+            const heartbeatInterval = setInterval(() => {
+                  SessionService.writeHeartbeat(sessionId, currentUser.uid);
+            }, 5000); // Write every 5s
+
+            // 2. Check partner's heartbeat
+            const checkInterval = setInterval(() => {
+                  if (sessionData?.heartbeat && partner) { // Check partner existence again inside
+                        // partner prop is just data, need partner UID from sessionData.users
+                        const partnerUid = sessionData.users.find(u => u !== currentUser.uid);
+
+                        if (partnerUid && sessionData.heartbeat[partnerUid]) {
+                              const hbTime = sessionData.heartbeat[partnerUid].toDate();
+                              const now = new Date();
+                              const diff = (now - hbTime) / 1000;
+
+                              if (diff > 15) { // 15s without heartbeat = disconnect warning
+                                    setPartnerDisconnected(true);
+                              } else {
+                                    setPartnerDisconnected(false);
+                              }
+                        }
+                  }
+            }, 5000);
+
+            return () => {
+                  clearInterval(heartbeatInterval);
+                  clearInterval(checkInterval);
+            };
+      }, [sessionId, currentUser, partner, sessionData]);
+
       const { isFocused, timeAway } = useTabFocus(handleFail);
 
       // 1. Timer & Focus Flow
@@ -282,6 +323,62 @@ const SessionView = ({ sessionId, currentUser, mode, partner, sessionData, onCom
                                                       {myTasks.map((t, i) => <li key={i}>• {t}</li>)}
                                                       {myTasks.length === 0 && <li className="italic opacity-50">No tasks set</li>}
                                                 </ul>
+                                          </div>
+                                          <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 h-full">
+                                                {/* My View */}
+                                                <div className={`relative border-r border-[#2a2a28]/50 flex flex-col items-center justify-center transition-all duration-1000 ${focusStage >= 3 ? 'opacity-100' : 'opacity-100'}`}>
+                                                      {/* ... (keep my view content) ... */}
+                                                      <div className="w-32 h-32 rounded-full border border-[#3a3a38] flex items-center justify-center mb-8 relative">
+                                                            {userProfile?.photoURL ? (
+                                                                  <img src={userProfile.photoURL} className="w-full h-full rounded-full object-cover opacity-50 grayscale" />
+                                                            ) : (
+                                                                  <div className="w-20 h-20 bg-[#2a2a28] rounded-full animate-pulse" />
+                                                            )}
+                                                            {/* My Pulse Ring */}
+                                                            <div className={`absolute inset-0 rounded-full border border-[#88a090] transition-all duration-500 ${isMyFlowing ? 'scale-110 opacity-50' : 'scale-100 opacity-0'}`} />
+                                                      </div>
+
+                                                      <p className="text-xs uppercase tracking-[0.2em] text-[#5c5c58] mb-2">You</p>
+                                                      <h2 className="text-2xl font-serif text-[#e0e0dc]">{userProfile?.displayName}</h2>
+                                                </div>
+
+                                                {/* Partner View - Only show if partner exists */}
+                                                {partner ? (
+                                                      <div className="relative flex flex-col items-center justify-center">
+                                                            {partnerDisconnected && (
+                                                                  <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                                                                        <div className="text-center">
+                                                                              <WifiOff className="w-8 h-8 text-[#5c5c58] mx-auto mb-2 animate-pulse" />
+                                                                              <p className="text-[10px] uppercase tracking-widest text-[#5c5c58]">Reconnecting Partner...</p>
+                                                                        </div>
+                                                                  </div>
+                                                            )}
+
+                                                            <div className="w-32 h-32 rounded-full border border-[#3a3a38] flex items-center justify-center mb-8 relative">
+                                                                  {partner.photoURL ? (
+                                                                        <img src={partner.photoURL} className="w-full h-full rounded-full object-cover opacity-50 grayscale" />
+                                                                  ) : (
+                                                                        <div className="w-20 h-20 bg-[#2a2a28] rounded-full" />
+                                                                  )}
+                                                                  {/* Partner Pulse Ring */}
+                                                                  <div className={`absolute inset-0 rounded-full border border-[#88a090] transition-all duration-500 ${isPartnerFlowing ? 'scale-110 opacity-50' : 'scale-100 opacity-0'}`} />
+                                                            </div>
+
+                                                            <p className="text-xs uppercase tracking-[0.2em] text-[#5c5c58] mb-2">Tethered To</p>
+                                                            <div className="text-center">
+                                                                  <h2 className="text-2xl font-serif text-[#e0e0dc]">{partner.name}</h2>
+                                                                  <p className="text-[10px] uppercase tracking-widest text-[#88a090] mt-1">{partner.major}</p>
+                                                            </div>
+                                                      </div>
+                                                ) : (
+                                                      <div className="relative flex flex-col items-center justify-center border-l border-[#2a2a28]/30 bg-[#1c1c1b]/20">
+                                                            <div className="w-32 h-32 rounded-full border-2 border-dashed border-[#2a2a28] flex items-center justify-center mb-8 opacity-50">
+                                                                  <div className="w-3 h-3 bg-[#5c5c58] rounded-full" />
+                                                            </div>
+                                                            <p className="text-xs uppercase tracking-[0.2em] text-[#5c5c58] mb-2">Solo Focus</p>
+                                                            <h2 className="text-2xl font-serif text-[#5c5c58] italic">Unbound</h2>
+                                                      </div>
+                                                )}
                                           </div>
                                           <div className="border-t border-[#2a2a28] pt-2">
                                                 <p className="text-xs text-[#88a090] mb-1 font-bold">{partner?.name || 'Partner'}</p>

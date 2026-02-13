@@ -14,35 +14,40 @@ export const AuthProvider = ({ children }) => {
 
       useEffect(() => {
             const unsubscribe = onAuthStateChanged(auth, async (user) => {
-                  setCurrentUser(user);
-                  if (user) {
-                        // Fetch or create user profile in Firestore
-                        const userRef = doc(db, 'users', user.uid);
-                        const userSnap = await getDoc(userRef);
+                  try {
+                        setCurrentUser(user);
+                        if (user) {
+                              // Fetch or create user profile in Firestore
+                              const userRef = doc(db, 'users', user.uid);
+                              const userSnap = await getDoc(userRef);
 
-                        if (userSnap.exists()) {
-                              setUserProfile(userSnap.data());
+                              if (userSnap.exists()) {
+                                    setUserProfile(userSnap.data());
+                              } else {
+                                    // Initialize new user profile
+                                    const newProfile = {
+                                          uid: user.uid,
+                                          displayName: user.displayName,
+                                          email: user.email,
+                                          photoURL: user.photoURL,
+                                          elo: 1000,
+                                          rank: 'Drifter',
+                                          major: 'Undecided',
+                                          bio: '',
+                                          onboarded: false,
+                                          createdAt: new Date()
+                                    };
+                                    await setDoc(userRef, newProfile);
+                                    setUserProfile(newProfile);
+                              }
                         } else {
-                              // Initialize new user profile
-                              const newProfile = {
-                                    uid: user.uid,
-                                    displayName: user.displayName,
-                                    email: user.email,
-                                    photoURL: user.photoURL,
-                                    elo: 1000,
-                                    rank: 'Drifter',
-                                    major: 'Undecided',
-                                    bio: '',
-                                    onboarded: false,
-                                    createdAt: new Date()
-                              };
-                              await setDoc(userRef, newProfile);
-                              setUserProfile(newProfile);
+                              setUserProfile(null);
                         }
-                  } else {
-                        setUserProfile(null);
+                  } catch (error) {
+                        console.error("Auth context error:", error);
+                  } finally {
+                        setLoading(false);
                   }
-                  setLoading(false);
             });
 
             return unsubscribe;
@@ -79,7 +84,14 @@ export const AuthProvider = ({ children }) => {
 
       return (
             <AuthContext.Provider value={value}>
-                  {!loading && children}
+                  {loading ? (
+                        <div className="min-h-screen bg-[#141413] flex items-center justify-center text-[#88a090]">
+                              <div className="flex flex-col items-center space-y-4">
+                                    <div className="w-8 h-8 border-2 border-[#88a090]/20 border-t-[#88a090] rounded-full animate-spin" />
+                                    <p className="text-[10px] uppercase tracking-[0.3em] font-bold opacity-50">Initializing Tether</p>
+                              </div>
+                        </div>
+                  ) : children}
             </AuthContext.Provider>
       );
 };

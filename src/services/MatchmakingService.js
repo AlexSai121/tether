@@ -113,6 +113,65 @@ const MatchmakingService = {
                         deleteDoc(queueRef); // Cleanup if user cancels
                   };
             }
+      },
+
+      // Start a solo session immediately
+      startSoloSession: async (mode, userProfile) => {
+            // Cleanup old queue items just in case
+            const oldQueueQuery = query(
+                  collection(db, QUEUE_COLLECTION),
+                  where('uid', '==', userProfile.uid)
+            );
+            const oldDocs = await getDocs(oldQueueQuery);
+            oldDocs.forEach(d => deleteDoc(d.ref));
+
+            // Create session immediately
+            const sessionRef = await addDoc(collection(db, SESSION_COLLECTION), {
+                  mode: mode,
+                  status: 'active', // Skip pre-session
+                  createdAt: serverTimestamp(),
+                  startTime: serverTimestamp(), // Start immediately
+                  users: [userProfile.uid],
+                  userMap: {
+                        [userProfile.uid]: { name: userProfile.displayName, rank: userProfile.rank, major: userProfile.major || 'Undecided' }
+                  },
+                  tasks: {},
+                  type: 'solo'
+            });
+
+            return sessionRef.id;
+      },
+
+      /**
+       * Starts a solo session immediately.
+       * @param {string} mode - '50' or '25'
+       * @param {object} userProfile - User profile data
+       * @returns {string} sessionId
+       */
+      startSoloSession: async (mode, userProfile) => {
+            // Cleanup existing queue items
+            const q = query(collection(db, QUEUE_COLLECTION), where('uid', '==', userProfile.uid));
+            const oldDocs = await getDocs(q);
+            oldDocs.forEach(d => deleteDoc(d.ref));
+
+            const sessionRef = await addDoc(collection(db, SESSION_COLLECTION), {
+                  mode,
+                  status: 'active',
+                  type: 'solo',
+                  createdAt: serverTimestamp(),
+                  startTime: serverTimestamp(),
+                  users: [userProfile.uid],
+                  userMap: {
+                        [userProfile.uid]: {
+                              name: userProfile.displayName,
+                              rank: userProfile.rank,
+                              major: userProfile.major || 'Undecided'
+                        }
+                  },
+                  tasks: {}
+            });
+
+            return sessionRef.id;
       }
 };
 

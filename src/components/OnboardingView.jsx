@@ -17,14 +17,20 @@ const OnboardingView = () => {
       ];
 
       const handleFinish = async () => {
-            setSaving(true);
-            await updateProfile({
-                  displayName: name.trim() || currentUser.displayName,
-                  major: major || 'Undecided',
-                  bio: bio.trim(),
-                  onboarded: true
-            });
-            setSaving(false);
+            try {
+                  setSaving(true);
+                  await updateProfile({
+                        displayName: name.trim() || currentUser.displayName,
+                        major: major || 'Undecided',
+                        bio: bio.trim(),
+                        onboarded: true
+                  });
+            } catch (error) {
+                  console.error("Failed to update profile", error);
+                  alert("Something went wrong. Please check your connection or try again.");
+            } finally {
+                  setSaving(false);
+            }
       };
 
       return (
