@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { Shield, Target, Zap, Users, Flame, Info, ArrowRight, Circle } from 'lucide-react';
+import { Shield, Target, Zap, Users, Flame, Info, ArrowRight, Circle, Link2 } from 'lucide-react';
 import MatchmakingService from '../services/MatchmakingService';
+import ProfileSettings from './ProfileSettings';
+import BondsPanel from './BondsPanel';
 
-const Lobby = ({ onMatchFound, userElo, userRank, userProfile }) => {
+const Lobby = ({ onMatchFound, userElo, userRank, userProfile, currentUser, onViewArchives }) => {
       const [mode, setMode] = useState('50');
       const [isSearching, setIsSearching] = useState(false);
+      const [showSettings, setShowSettings] = useState(false);
+      const [showBonds, setShowBonds] = useState(false);
 
       const userName = userProfile?.displayName || "Drifter";
 
@@ -36,6 +40,9 @@ const Lobby = ({ onMatchFound, userElo, userRank, userProfile }) => {
                               <div className="w-10 h-10 bg-[#2a2a28] border border-[#3a3a38] rounded-full flex items-center justify-center">
                                     <Shield className="w-5 h-5 text-[#88a090]" />
                               </div>
+                              <button onClick={() => setShowBonds(true)} className="w-10 h-10 bg-[#2a2a28] border border-[#3a3a38] rounded-full flex items-center justify-center hover:border-[#88a090] transition-colors" title="Bonds">
+                                    <Link2 className="w-5 h-5 text-[#5c5c58] hover:text-[#88a090]" />
+                              </button>
                         </div>
 
                         <div className="flex items-center space-x-6">
@@ -44,7 +51,7 @@ const Lobby = ({ onMatchFound, userElo, userRank, userProfile }) => {
                                     <p className="text-sm font-serif text-[#e0e0dc]">{userName} <span className="text-[10px] text-[#5c5c58] ml-2 tabular-nums">{userElo}</span></p>
                               </div>
                               <div className="w-px h-8 bg-[#2a2a28]" />
-                              <button className="text-[10px] font-bold uppercase tracking-widest hover:text-[#e0e0dc] transition-colors">
+                              <button onClick={() => setShowSettings(true)} className="text-[10px] font-bold uppercase tracking-widest hover:text-[#e0e0dc] transition-colors">
                                     Settings
                               </button>
                         </div>
@@ -199,7 +206,7 @@ const Lobby = ({ onMatchFound, userElo, userRank, userProfile }) => {
                                           Last session: <br />
                                           <span className="text-[#e0e0dc] not-italic">"Alex matched with Julian from Med-Bio. Both remained tethered for 50m. Focus was maintained."</span>
                                     </p>
-                                    <button className="text-[10px] font-bold uppercase tracking-widest border-b border-[#2a2a28] pb-1 hover:border-[#88a090] transition-colors">
+                                    <button onClick={onViewArchives} className="text-[10px] font-bold uppercase tracking-widest border-b border-[#2a2a28] pb-1 hover:border-[#88a090] transition-colors">
                                           Recent Archives
                                     </button>
                               </div>
@@ -212,6 +219,9 @@ const Lobby = ({ onMatchFound, userElo, userRank, userProfile }) => {
                         <span className="text-[9px] uppercase tracking-[0.4em] font-medium">Tether / Collective Presence</span>
                         <p className="text-[9px] uppercase tracking-[0.4em] mt-4 md:mt-0 italic">Est. 2026 — Built for the focused mind.</p>
                   </footer>
+
+                  {showSettings && <ProfileSettings onClose={() => setShowSettings(false)} />}
+                  {showBonds && currentUser && <BondsPanel currentUser={currentUser} onClose={() => setShowBonds(false)} />}
             </div>
       );
 };

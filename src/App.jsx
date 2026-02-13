@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Lobby from './components/Lobby';
 import PreSessionView from './components/PreSessionView';
 import SessionView from './components/SessionView';
 import ResultsView from './components/ResultsView';
 import LoginView from './components/LoginView';
+import OnboardingView from './components/OnboardingView';
+import ArchivesView from './components/ArchivesView';
 import EloService from './services/EloService';
 import MatchmakingService from './services/MatchmakingService';
 import SessionService from './services/SessionService';
@@ -12,57 +14,18 @@ import './index.css';
 
 const TetherApp = () => {
   const { currentUser, userProfile, loading } = useAuth();
-  const [view, setView] = useState('lobby'); // lobby, pre-session, session, results
+  const [view, setView] = useState('lobby'); // lobby, pre-session, session, results, archives
   const [sessionId, setSessionId] = useState(null);
   const [sessionData, setSessionData] = useState(null);
   const [partner, setPartner] = useState(null);
+  const [partnerUid, setPartnerUid] = useState(null);
 
   // Results state
   const [lastResult, setLastResult] = useState('success');
   const [oldElo, setOldElo] = useState(1000);
   const [newElo, setNewElo] = useState(1000);
 
-  // --- Subscription to Active Session ---
-  useEffect(() => {
-    if (!sessionId) return;
-
-    const unsubscribe = SessionService.subscribe(sessionId, (data) => {
-      setSessionData(data);
-
-      if (data.users && currentUser) {
-        const partnerUid = data.users.find(uid => uid !== currentUser.uid);
-        if (partnerUid && data.userData && data.userData[partnerUid]) {
-          setPartner(data.userData[partnerUid]);
-        }
-      }
-
-      if (data.status === 'active' && view !== 'session') {
-        setView('session');
-      } else if (data.status === 'finished' && view !== 'results') {
-        handleSessionFinished('success');
-      } else if (data.status === 'abandoned' && view !== 'results') {
-        handleSessionFinished('abandoned');
-      }
-    });
-
-    return () => unsubscribe();
-  }, [sessionId, view, currentUser, handleSessionFinished]);
-
-  const handleFindMatch = async (mode) => {
-    // Note: We need a way to cancel this if user leaves lobby, but keeping simple for now
-    await MatchmakingService.findMatch(mode, userProfile, (sid) => {
-      setSessionId(sid);
-      setView('pre-session');
-    });
-  };
-
-  const handlePreSessionReady = (myTasks) => {
-    if (sessionId && currentUser) {
-      SessionService.setReady(sessionId, currentUser.uid, myTasks);
-    }
-  };
-
-  const handleSessionFinished = async (resultType) => {
+  const handleSessionFinished = useCallback(async (resultType) => {
     setLastResult(resultType);
     const currentElo = userProfile?.elo || 1000;
     const change = EloService.calculateEloChange(currentElo, resultType);
@@ -82,6 +45,46 @@ const TetherApp = () => {
         });
       });
     }
+  }, [currentUser, userProfile]);
+
+  // --- Subscription to Active Session ---
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const unsubscribe = SessionService.subscribe(sessionId, (data) => {
+      setSessionData(data);
+
+      if (data.users && currentUser) {
+        const pUid = data.users.find(uid => uid !== currentUser.uid);
+        setPartnerUid(pUid);
+        if (pUid && data.userMap && data.userMap[pUid]) {
+          setPartner(data.userMap[pUid]);
+        }
+      }
+
+      if (data.status === 'active' && view !== 'session') {
+        setView('session');
+      } else if (data.status === 'finished' && view !== 'results') {
+        handleSessionFinished('success');
+      } else if (data.status === 'abandoned' && view !== 'results') {
+        handleSessionFinished('abandoned');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [sessionId, view, currentUser, handleSessionFinished]);
+
+  const handleFindMatch = async (mode) => {
+    await MatchmakingService.findMatch(mode, userProfile, (sid) => {
+      setSessionId(sid);
+      setView('pre-session');
+    });
+  };
+
+  const handlePreSessionReady = (myTasks) => {
+    if (sessionId && currentUser) {
+      SessionService.setReady(sessionId, currentUser.uid, myTasks);
+    }
   };
 
   const handleReturnToLobby = () => {
@@ -89,6 +92,7 @@ const TetherApp = () => {
     setSessionId(null);
     setSessionData(null);
     setPartner(null);
+    setPartnerUid(null);
   };
 
   if (loading) {
@@ -99,6 +103,10 @@ const TetherApp = () => {
     return <LoginView />;
   }
 
+  if (!userProfile?.onboarded) {
+    return <OnboardingView />;
+  }
+
   return (
     <>
       {view === 'lobby' && (
@@ -107,6 +115,15 @@ const TetherApp = () => {
           userElo={userProfile?.elo || 1000}
           userRank={userProfile?.rank || 'Drifter'}
           userProfile={userProfile}
+          currentUser={currentUser}
+          onViewArchives={() => setView('archives')}
+        />
+      )}
+
+      {view === 'archives' && (
+        <ArchivesView
+          currentUser={currentUser}
+          onBack={() => setView('lobby')}
         />
       )}
 
@@ -138,6 +155,10 @@ const TetherApp = () => {
           oldElo={oldElo}
           newElo={newElo}
           onReturn={handleReturnToLobby}
+          sessionId={sessionId}
+          currentUser={currentUser}
+          partner={partner}
+          partnerUid={partnerUid}
         />
       )}
     </>

@@ -3,7 +3,14 @@ import {
       doc,
       onSnapshot,
       updateDoc,
-      serverTimestamp
+      serverTimestamp,
+      collection,
+      addDoc,
+      query,
+      where,
+      orderBy,
+      getDocs,
+      limit
 } from 'firebase/firestore';
 
 const SessionService = {
@@ -45,6 +52,45 @@ const SessionService = {
             return updateDoc(doc(db, 'sessions', sessionId), {
                   status: status,
                   endTime: serverTimestamp()
+            });
+      },
+
+      // Send a post-session note
+      sendNote: (sessionId, uid, text) => {
+            return updateDoc(doc(db, 'sessions', sessionId), {
+                  [`notes.${uid}`]: {
+                        text: text,
+                        time: serverTimestamp()
+                  }
+            });
+      },
+
+      // Subscribe to notes on a session
+      subscribeToNotes: (sessionId, callback) => {
+            return onSnapshot(doc(db, 'sessions', sessionId), (docSnap) => {
+                  if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        callback(data.notes || {});
+                  }
+            });
+      },
+
+      // Get session history for a user
+      getHistory: async (uid, maxResults = 20) => {
+            const q = query(
+                  collection(db, 'sessions'),
+                  where('users', 'array-contains', uid),
+                  orderBy('createdAt', 'desc'),
+                  limit(maxResults)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      },
+
+      // Write heartbeat
+      writeHeartbeat: (sessionId, uid) => {
+            return updateDoc(doc(db, 'sessions', sessionId), {
+                  [`heartbeat.${uid}`]: serverTimestamp()
             });
       }
 };

@@ -68,7 +68,6 @@ const SessionView = ({ sessionId, currentUser, mode, partner, sessionData, onCom
       useEffect(() => {
             if (sessionData?.lastPulse) {
                   const pulse = sessionData.lastPulse;
-                  // Only show if it's from partner and we haven't handled this specific pulse yet (using timestamp/time)
                   const pulseId = pulse.time?.toMillis() || pulse.time;
                   if (pulse.from !== currentUser.uid && pulseId !== lastPulseHandled.current) {
                         lastPulseHandled.current = pulseId;
@@ -78,10 +77,38 @@ const SessionView = ({ sessionId, currentUser, mode, partner, sessionData, onCom
             }
       }, [sessionData?.lastPulse, currentUser.uid]);
 
-      // 3. Status sync from Firebase (e.g. if partner abandons)
+      // 3. Reconnection: Heartbeat writes every 30s
+      useEffect(() => {
+            if (!sessionId || status === 'failed' || status === 'success') return;
+            const interval = setInterval(() => {
+                  SessionService.writeHeartbeat(sessionId, currentUser.uid).catch(() => { });
+            }, 30000);
+            // Write immediately on mount
+            SessionService.writeHeartbeat(sessionId, currentUser.uid).catch(() => { });
+            return () => clearInterval(interval);
+      }, [sessionId, currentUser.uid, status]);
+
+      // 4. Reconnection: Grace period on connection loss
+      const [isReconnecting, setIsReconnecting] = useState(false);
+      const reconnectTimerRef = useRef(null);
+
+      useEffect(() => {
+            // This is a lightweight connection check—if the snapshot fires, we're connected
+            if (sessionData) {
+                  if (isReconnecting) {
+                        setIsReconnecting(false);
+                        if (reconnectTimerRef.current) {
+                              clearTimeout(reconnectTimerRef.current);
+                              reconnectTimerRef.current = null;
+                        }
+                  }
+            }
+      }, [sessionData]);
+
+      // 5. Status sync from Firebase (e.g. if partner abandons)
       useEffect(() => {
             if (sessionData?.status === 'abandoned' && status !== 'abandoned') {
-                  setStatus('abandoned'); // Simple placeholder for now
+                  setStatus('abandoned');
             }
       }, [sessionData?.status, status]);
 
@@ -132,6 +159,11 @@ const SessionView = ({ sessionId, currentUser, mode, partner, sessionData, onCom
       const pulseOpacity = 0.05 + (flowIntensity / 100) * 0.15;
       const pulseSpeed = 10 - (flowIntensity / 100) * 5;
 
+      // Progressive Focus Stages
+      const flowStage = flowIntensity < 25 ? 1 : flowIntensity < 50 ? 2 : flowIntensity < 75 ? 3 : 4;
+      const flowColor = flowStage <= 2 ? '#88a090' : flowStage === 3 ? '#6bc5b0' : '#c9a84c';
+      const flowLabel = flowStage === 1 ? 'Settling' : flowStage === 2 ? 'Focused' : flowStage === 3 ? 'Flowing' : 'Deep Flow';
+
       if (status === 'failed') {
             return (
                   <div className="min-h-screen bg-[#1c1c1b] flex flex-col items-center justify-center text-rose-500 relative overflow-hidden">
@@ -178,13 +210,33 @@ const SessionView = ({ sessionId, currentUser, mode, partner, sessionData, onCom
 
                   {/* Visual Flow Pulse Background */}
                   <div
-                        className="absolute inset-0 pointer-events-none rounded-full blur-[100px] transition-all ease-in-out bg-[#88a090]"
+                        className={`absolute inset-0 pointer-events-none rounded-full blur-[100px] transition-all ease-in-out ${flowStage === 4 ? 'flow-stage-deep' : ''}`}
                         style={{
+                              backgroundColor: flowColor,
                               opacity: pulseOpacity,
                               transform: 'scale(0.8)',
                               animation: `breathing ${pulseSpeed}s infinite ease-in-out`
                         }}
                   />
+
+                  {/* Floating Particles (Stage 2+) */}
+                  {flowStage >= 2 && (
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                              {[...Array(flowStage >= 3 ? 8 : 4)].map((_, i) => (
+                                    <div
+                                          key={i}
+                                          className="absolute w-1 h-1 rounded-full"
+                                          style={{
+                                                backgroundColor: flowColor,
+                                                left: `${15 + (i * 11) % 70}%`,
+                                                opacity: 0.3 + (flowStage * 0.1),
+                                                animation: `particleDrift ${6 + i * 2}s linear infinite`,
+                                                animationDelay: `${i * 1.5}s`
+                                          }}
+                                    />
+                              ))}
+                        </div>
+                  )}
 
                   {/* Partner Pulse Receipt Overlay */}
                   {pulseReceived && (
@@ -293,8 +345,13 @@ const SessionView = ({ sessionId, currentUser, mode, partner, sessionData, onCom
                   {/* Timer Display */}
                   <div className={`relative z-10 text-center transition-all duration-500 ${(status === 'warning' || isAbandoning || status === 'abandoning') ? 'blur-sm scale-95 opacity-50' : ''}`}>
                         <div className="mb-8 flex items-center justify-center space-x-3">
-                              <span className="inline-block w-2 h-2 rounded-full bg-[#88a090] animate-pulse" />
-                              <span className="text-[#88a090] text-xs uppercase tracking-[0.3em] font-bold">Live Session</span>
+                              <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: flowColor }} />
+                              <span className="text-xs uppercase tracking-[0.3em] font-bold" style={{ color: flowColor }}>Live Session</span>
+                              {flowStage >= 2 && (
+                                    <span className="text-[10px] uppercase tracking-widest px-3 py-1 rounded-full border" style={{ color: flowColor, borderColor: flowColor + '40' }}>
+                                          {flowLabel}
+                                    </span>
+                              )}
                         </div>
 
                         <h1 className="text-[12rem] md:text-[16rem] leading-none font-serif text-[#e0e0dc] font-variant-numeric tabular-nums tracking-tighter">

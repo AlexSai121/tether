@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, googleProvider, db } from '../services/firebase'; // Ensure this path is correct
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -31,7 +31,9 @@ export const AuthProvider = ({ children }) => {
                                     photoURL: user.photoURL,
                                     elo: 1000,
                                     rank: 'Drifter',
-                                    major: 'Undecided', // Could prompt for this later
+                                    major: 'Undecided',
+                                    bio: '',
+                                    onboarded: false,
                                     createdAt: new Date()
                               };
                               await setDoc(userRef, newProfile);
@@ -59,11 +61,19 @@ export const AuthProvider = ({ children }) => {
             return signOut(auth);
       };
 
+      const updateProfile = async (updates) => {
+            if (!currentUser) return;
+            const userRef = doc(db, 'users', currentUser.uid);
+            await updateDoc(userRef, updates);
+            setUserProfile(prev => ({ ...prev, ...updates }));
+      };
+
       const value = {
             currentUser,
             userProfile,
             login,
             logout,
+            updateProfile,
             loading
       };
 
